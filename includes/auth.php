@@ -1,6 +1,6 @@
 <?php
 session_start();
-require_once '../config/database.php';
+require_once __DIR__ . '/../config/database.php';
 
 class Auth {
     private $db;
@@ -136,14 +136,52 @@ class Auth {
         }
     }
     
+    public function updateUsername($userId, $newUsername) {
+        // Validate username
+        if (empty($newUsername)) {
+            return ['success' => false, 'message' => 'Username cannot be empty'];
+        }
+
+        if (strlen($newUsername) < 3 || strlen($newUsername) > 50) {
+            return ['success' => false, 'message' => 'Username must be between 3 and 50 characters'];
+        }
+
+        // Check if username contains only valid characters (letters, numbers, underscores, hyphens)
+        if (!preg_match('/^[a-zA-Z0-9_-]+$/', $newUsername)) {
+            return ['success' => false, 'message' => 'Username can only contain letters, numbers, underscores, and hyphens'];
+        }
+
+        // Check if username is already taken by another user
+        $existing = $this->db->fetchOne("SELECT id FROM users WHERE username = ? AND id != ?", [$newUsername, $userId]);
+        if ($existing) {
+            return ['success' => false, 'message' => 'Username is already taken'];
+        }
+
+        try {
+            $this->db->execute(
+                "UPDATE users SET username = ?, updated_at = NOW() WHERE id = ?",
+                [$newUsername, $userId]
+            );
+
+            // Update session with new username
+            if (isset($_SESSION['user_id']) && $_SESSION['user_id'] == $userId) {
+                $_SESSION['username'] = $newUsername;
+            }
+
+            return ['success' => true, 'message' => 'Username updated successfully'];
+        } catch (Exception $e) {
+            return ['success' => false, 'message' => 'Failed to update username: ' . $e->getMessage()];
+        }
+    }
+
     public function updateUserPreferences($userId, $preferences) {
         try {
             $this->db->execute(
-                "UPDATE users SET 
-                 email_notifications = ?, 
-                 auto_save = ?, 
-                 system_alerts = ?, 
-                 financial_reports = ?, 
+                "UPDATE users SET
+                 email_notifications = ?,
+                 auto_save = ?,
+                 system_alerts = ?,
+                 financial_reports = ?,
                  security_alerts = ?,
                  updated_at = NOW()
                  WHERE id = ?",
